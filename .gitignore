@@ -1,0 +1,30 @@
+﻿# Datos, modelos y resultados generados
+data/*
+!data/*/
+!data/**/.gitkeep
+models/*
+!models/.gitkeep
+outputs/*
+!outputs/.gitkeep
+
+# Pesos de modelos
+*.pt
+*.pth
+*.onnx
+*.h5
+*.ckpt
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# Entorno y editor
+.env
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
