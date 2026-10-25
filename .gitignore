@@ -1,30 +1,47 @@
-﻿# Datos, modelos y resultados generados
-data/*
-!data/*/
-!data/**/.gitkeep
-models/*
-!models/.gitkeep
-outputs/*
-!outputs/.gitkeep
+﻿# Lista blanca: se ignora TODO y solo se respalda lo que está aquí.
+# Un archivo nuevo queda fuera hasta que lo agregues con una regla "!".
+*
 
-# Pesos de modelos
-*.pt
-*.pth
-*.onnx
-*.h5
-*.ckpt
+# Configuración del proyecto
+!.gitignore
+!.python-version
+!README.md
+!pyproject.toml
+!uv.lock
 
-# Python
+# Código fuente y pruebas
+!src/
+!src/**
+!tests/
+!tests/**
+
+# Configuración del entrenamiento
+!configs/
+!configs/config.yaml
+
+# Notebook tutorial
+!notebooks/
+!notebooks/*.ipynb
+
+# Página web (la carpeta web/model se genera con cv.export y no se respalda)
+!web/
+!web/index.html
+
+# App de Streamlit: modelo, métricas y dependencias para el despliegue
+!app/
+!app/streamlit_app.py
+!app/requirements.txt
+!app/model/
+!app/model/best.onnx
+!app/model/classes.json
+!app/assets/
+!app/assets/*
+
+# Exclusiones dentro de lo permitido (tienen prioridad por ir al final)
 __pycache__/
 *.py[cod]
-.venv/
-venv/
+.pytest_cache/
+.ruff_cache/
 .ipynb_checkpoints/
-
-# Entorno y editor
+.streamlit/secrets.toml
 .env
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
-

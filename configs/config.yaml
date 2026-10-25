@@ -1,0 +1,21 @@
+# Configuración del proyecto. Las rutas son relativas a la raíz del repo.
+seed: 42
+
+data:
+  root: data/raw          # aquí torchvision descarga Oxford-IIIT Pet
+  image_size: 224
+  val_split: 0.15         # fracción de "trainval" usada para validación
+  num_workers: 0          # 0 es lo más seguro en Windows/Jupyter
+
+model:
+  name: resnet18          # backbone preentrenado en ImageNet
+  freeze_backbone: true   # true: solo se entrena la capa final
+
+train:
+  epochs: 5
+  batch_size: 64
+  lr: 0.001
+  checkpoint: models/best.pt
+
+evaluate:
+  output_dir: outputs

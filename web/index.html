@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>¿Qué mascota es? · Clasificador Pixel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.min.js"></script>
+  <style>
+    :root {
+      --ink: #2d2a4a;
+      --bg1: #fdf1f5;
+      --bg2: #eef6ff;
+      --mint: #d4f1e3;
+      --lavender: #e6dcff;
+      --butter: #fff3c4;
+      --peach: #ffe0cc;
+      --sky: #d6ebff;
+      --pink: #ffd1e0;
+      /* Escala de confianza: baja, media y alta (ver sección 4 de la página) */
+      --low: #e5484d;   /* Baja  0–39 % */
+      --mid: #2f6fe4;   /* Media 40–74 % */
+      --high: #1fa463;  /* Alta  75–100 % */
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Nunito", system-ui, sans-serif;
+      color: var(--ink);
+      background: linear-gradient(180deg, var(--bg1), var(--bg2));
+      min-height: 100vh;
+    }
+
+    /* Puntitos pastel de fondo */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background-image: radial-gradient(#ffffffb3 2px, transparent 2px);
+      background-size: 24px 24px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .wrap {
+      position: relative;
+      z-index: 1;
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 24px 16px 0;
+    }
+
+    h1, h2, h3 {
+      font-family: "Press Start 2P", monospace;
+      font-weight: 400;
+      line-height: 1.6;
+      margin: 0 0 12px;
+    }
+    h1 { font-size: clamp(14px, 3vw, 22px); }
+    h2 { font-size: 13px; }
+    h3 { font-size: 11px; }
+
+    p { line-height: 1.5; margin: 0 0 8px; }
+    .muted { opacity: 0.75; font-size: 14px; }
+
+    canvas.px { image-rendering: pixelated; image-rendering: crisp-edges; }
+
+    /* Cajas estilo pixel: borde sólido + sombra desplazada sin difuminar */
+    .box {
+      background: #fffdf7;
+      border: 4px solid var(--ink);
+      box-shadow: 6px 6px 0 var(--ink);
+      padding: 20px;
+      margin-bottom: 28px;
+    }
+
+    .tint-mint { background: var(--mint); }
+    .tint-lav { background: var(--lavender); }
+    .tint-butter { background: var(--butter); }
+    .tint-peach { background: var(--peach); }
+    .tint-sky { background: var(--sky); }
+
+    /* Cabecera */
+    header.hero {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .hero-sprites { display: flex; gap: 10px; align-items: flex-end; }
+
+    /* Pasos */
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 16px;
+    }
+    .step { position: relative; }
+    .step .num {
+      display: inline-grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border: 3px solid var(--ink);
+      background: var(--butter);
+      font-family: "Press Start 2P", monospace;
+      font-size: 11px;
+      margin-bottom: 10px;
+    }
+    .step p { font-size: 14px; }
+
+    /* Zona de subida */
+    .drop {
+      display: grid;
+      place-items: center;
+      gap: 10px;
+      text-align: center;
+      border: 4px dashed var(--ink);
+      background: var(--lavender);
+      padding: 28px 16px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .drop.over { background: var(--pink); }
+    .drop input { display: none; }
+    .drop strong { font-family: "Press Start 2P", monospace; font-weight: 400; font-size: 11px; }
+
+    .previews {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 18px;
+      margin-top: 18px;
+    }
+    .previews figure { margin: 0; text-align: center; }
+    .previews figcaption { font-size: 13px; margin-top: 6px; font-weight: 800; }
+    .frame {
+      border: 4px solid var(--ink);
+      background: #fff;
+      display: grid;
+      place-items: center;
+      min-height: 200px;
+      padding: 8px;
+    }
+    .frame img, .frame canvas { max-width: 100%; height: auto; display: block; }
+
+    .status {
+      margin-top: 14px;
+      font-weight: 800;
+      font-size: 14px;
+    }
+
+    /* Resultados */
+    .results {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 22px;
+      align-items: start;
+    }
+    @media (max-width: 760px) { .results { grid-template-columns: 1fr; } }
+
+    .bubble {
+      background: #fff;
+      border: 3px solid var(--ink);
+      padding: 10px 12px;
+      font-weight: 800;
+      position: relative;
+      margin-bottom: 12px;
+    }
+    .mascot { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+
+    .card-row { margin-bottom: 18px; }
+    .card-row .label { font-size: 13px; font-weight: 800; margin-bottom: 4px; }
+    .card-row .name { font-size: 22px; font-weight: 800; }
+
+    /* Porcentaje coloreado según la escala */
+    .pct {
+      display: inline-block;
+      font-family: "Press Start 2P", monospace;
+      font-size: 13px;
+      padding: 6px 8px;
+      border: 3px solid var(--ink);
+      background: #fff;
+      color: #fff;
+      box-shadow: 3px 3px 0 var(--ink);
+    }
+    .pct.low { background: var(--low); }
+    .pct.mid { background: var(--mid); }
+    .pct.high { background: var(--high); }
+
+    .bar {
+      height: 14px;
+      border: 3px solid var(--ink);
+      background: #fff;
+      margin-top: 8px;
+    }
+    .bar > div { height: 100%; }
+
+    .top3 { list-style: none; padding: 0; margin: 0; }
+    .top3 li { margin-bottom: 14px; }
+    .top3 .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-weight: 800; }
+
+    .advice {
+      font-size: 14px;
+      padding: 10px 12px;
+      border: 3px solid var(--ink);
+      background: var(--peach);
+      margin-top: 8px;
+    }
+
+    /* Leyenda de la escala */
+    .legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+    .legend .item { border: 3px solid var(--ink); background: #fff; padding: 12px; }
+    .legend .item .pct { margin-bottom: 8px; }
+    .legend p { font-size: 14px; margin: 0; }
+
+    /* Acciones */
+    .actions { display: flex; flex-wrap: wrap; gap: 12px; }
+    .btn {
+      font-family: "Press Start 2P", monospace;
+      font-size: 10px;
+      line-height: 1.4;
+      border: 3px solid var(--ink);
+      background: var(--mint);
+      color: var(--ink);
+      padding: 10px 12px;
+      box-shadow: 4px 4px 0 var(--ink);
+      cursor: pointer;
+    }
+    .btn:hover { transform: translate(-1px, -1px); }
+    .btn:active { transform: translate(4px, 4px); box-shadow: none; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: 4px 4px 0 var(--ink); }
+    .btn.peach { background: var(--peach); }
+    .btn.lav { background: var(--lavender); }
+    .btn.sky { background: var(--sky); }
+    .btn.butter { background: var(--butter); }
+
+    .cmd {
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: 13px;
+      background: #2d2a4a;
+      color: #fff;
+      padding: 10px 12px;
+      margin-top: 10px;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+    .toast { font-weight: 800; min-height: 1.4em; margin-top: 12px; }
+
+    .hidden { display: none !important; }
+
+    /* Pie */
+    footer {
+      position: relative;
+      z-index: 1;
+      margin-top: 36px;
+      text-align: center;
+    }
+    .grass {
+      height: 26px;
+      border-top: 4px solid var(--ink);
+      background: repeating-linear-gradient(90deg, var(--mint) 0 16px, #bfe8cf 16px 32px);
+    }
+    .footer-text {
+      font-family: "Press Start 2P", monospace;
+      font-size: 11px;
+      padding: 18px 12px 28px;
+      background: #fffdf7;
+    }
+    .footer-sprites { display: flex; justify-content: center; gap: 12px; align-items: flex-end; padding-top: 16px; }
+
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+
+    <header class="hero">
+      <div>
+        <h1>¿Qué mascota es?</h1>
+        <p class="muted">Sube una foto de un perro o un gato y descubre su especie, su raza y qué tan segura está la red.</p>
+      </div>
+      <div class="hero-sprites" aria-hidden="true">
+        <canvas class="px" data-sprite="plant" data-scale="5"></canvas>
+        <canvas class="px" data-sprite="cat" data-scale="5"></canvas>
+        <canvas class="px" data-sprite="dog" data-scale="5"></canvas>
+      </div>
+    </header>
+
+    <!-- 1. Cómo funciona -->
+    <section class="box tint-lav">
+      <h2>1 · ¿Cómo funciona?</h2>
+      <p class="muted">Cinco pasos, los mismos que usas en el notebook <code>notebooks/01_tutorial_clasificacion_mascotas.ipynb</code>.</p>
+      <div class="steps" style="margin-top:16px">
+        <div class="step">
+          <span class="num">1</span>
+          <h3>Subes tu foto</h3>
+          <p>La imagen se procesa en tu navegador. No se envía a ningún servidor.</p>
+        </div>
+        <div class="step">
+          <span class="num">2</span>
+          <h3>Recorte 224×224</h3>
+          <p>La red solo mira un cuadrado centrado. Abajo ves exactamente lo que recibe.</p>
+        </div>
+        <div class="step">
+          <span class="num">3</span>
+          <h3>Normalizamos</h3>
+          <p>Restamos la media de ImageNet y dividimos por la desviación, como en entrenamiento.</p>
+        </div>
+        <div class="step">
+          <span class="num">4</span>
+          <h3>ResNet18</h3>
+          <p>La red busca rasgos (orejas, hocico, pelaje) y da 37 puntajes, uno por raza.</p>
+        </div>
+        <div class="step">
+          <span class="num">5</span>
+          <h3>Softmax → %</h3>
+          <p>Los puntajes pasan a probabilidades que suman 100 %. La especie es la suma de sus razas.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. Subida -->
+    <section class="box tint-sky">
+      <h2>2 · Sube tu foto</h2>
+      <label id="drop" class="drop">
+        <canvas class="px" data-sprite="cat" data-scale="6" aria-hidden="true"></canvas>
+        <strong>Arrastra una foto aquí</strong>
+        <span class="muted">o haz clic para elegirla (JPG, PNG, WEBP)</span>
+        <input id="file" type="file" accept="image/*">
+      </label>
+
+      <div id="previews" class="previews hidden">
+        <figure>
+          <div class="frame"><img id="orig" alt="Tu foto"></div>
+          <figcaption>Tu foto</figcaption>
+        </figure>
+        <figure>
+          <div class="frame"><canvas id="crop" class="px" width="224" height="224"></canvas></div>
+          <figcaption>Lo que ve la red (224×224)</figcaption>
+        </figure>
+      </div>
+      <div id="status" class="status">Cargando el modelo…</div>
+    </section>
+
+    <!-- 3. Resultados -->
+    <section id="resultsBox" class="box tint-butter hidden">
+      <h2>3 · Resultado</h2>
+      <div class="results" style="margin-top:16px">
+        <div>
+          <div class="mascot">
+            <canvas id="mascot" class="px" width="200" height="100" style="width:200px;height:auto"></canvas>
+            <div class="bubble" id="bubble">…</div>
+          </div>
+
+          <div class="card-row">
+            <div class="label">Especie</div>
+            <div class="name" id="speciesName">—</div>
+            <div id="speciesPct"></div>
+            <div class="bar" id="speciesBar"></div>
+          </div>
+
+          <div class="card-row">
+            <div class="label">Raza más probable</div>
+            <div class="name" id="breedName">—</div>
+            <div id="breedPct"></div>
+            <div class="bar" id="breedBar"></div>
+            <div class="advice" id="advice"></div>
+          </div>
+        </div>
+
+        <div>
+          <div class="label" style="font-weight:800;margin-bottom:10px">Top 3 razas</div>
+          <ul class="top3" id="top3"></ul>
+          <p class="muted" style="margin-top:12px">La suma de las 37 razas siempre es 100 %. Si la foto no es de perro o gato, el resultado será poco confiable.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. Escala de colores -->
+    <section class="box tint-peach">
+      <h2>4 · Escala de confianza</h2>
+      <p class="muted" style="margin-bottom:14px">Cada porcentaje se colorea según qué tan segura está la red.</p>
+      <div class="legend">
+        <div class="item">
+          <span class="pct low">0–39 %</span>
+          <p><strong>Baja · rojo.</strong> La red duda. Probablemente la foto es confusa o la raza se parece a otra.</p>
+        </div>
+        <div class="item">
+          <span class="pct mid">40–74 %</span>
+          <p><strong>Media · azul.</strong> Respuesta razonable, pero hay otras razas en juego.</p>
+        </div>
+        <div class="item">
+          <span class="pct high">75–100 %</span>
+          <p><strong>Alta · verde.</strong> La red está muy segura de su respuesta.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. Acciones del proyecto -->
+    <section class="box tint-mint">
+      <h2>5 · Acciones del proyecto</h2>
+      <p class="muted" style="margin-bottom:14px">Herramientas para llevar este resultado al proyecto de Python.</p>
+      <div class="actions">
+        <button class="btn" id="btnCopyPredict" disabled>Copiar comando de predicción</button>
+        <button class="btn sky" id="btnCopyTrain">Copiar comando de entrenamiento</button>
+        <button class="btn lav" id="btnDownload" disabled>Descargar resultado (.json)</button>
+        <button class="btn peach" id="btnMetrics">Ver métricas del modelo</button>
+        <button class="btn butter" id="btnConfusion">Ver matriz de confusión</button>
+        <button class="btn" id="btnReset">Otra foto</button>
+      </div>
+      <div class="cmd" id="cmdBox">uv run python -m cv.predict "tu_foto.jpg" --topk 3</div>
+      <div class="toast" id="toast"></div>
+      <div id="metricsBox" class="advice hidden" style="background:var(--lavender)"></div>
+    </section>
+
+  </div>
+
+  <footer>
+    <div class="grass"></div>
+    <div class="footer-text">Con &lt;3 &lt;3 &lt;3 para la Dragoncita rica.</div>
+    <p class="muted" style="font-size:12px;padding:0 16px 24px;margin:0">
+      Dataset: O. M. Parkhi, A. Vedaldi, A. Zisserman, C. V. Jawahar, "Cats and Dogs", CVPR 2012 · Licencia CC BY-SA 4.0
+    </p>
+    <div class="footer-sprites" aria-hidden="true">
+      <canvas class="px" data-sprite="plant" data-scale="4"></canvas>
+      <canvas class="px" data-sprite="dog" data-scale="4"></canvas>
+      <canvas class="px" data-sprite="cat" data-scale="4"></canvas>
+      <canvas class="px" data-sprite="plant" data-scale="4"></canvas>
+    </div>
+  </footer>
+
+<script>
+// ---------- Sprites pixel art (cada letra es un color de la paleta) ----------
+const SPRITES = {
+  cat: {
+    palette: { K: "#4a3f5c", o: "#ffc48a", e: "#3d3d5c", w: "#ffffff", p: "#ffb3c7", n: "#ff8fab" },
+    rows: [
+      "..KK............KK..",
+      "..KpK..........KpK..",
+      ".KppKKKKKKKKKKKKppK.",
+      ".KooooooooooooooooK.",
+      ".KoweooooooooooewoK.",
+      ".KoeeooooooooooeeoK.",
+      ".KppooooooooooooppK.",
+      ".KooooooonnoooooooK.",
+      "..KooooooooooooooK..",
+      ".KooooooooooooooooK.",
+      "..KooooooooooooooK..",
+      "...KKKKKKKKKKKKKK...",
+    ],
+  },
+  dog: {
+    palette: { K: "#4a3f5c", b: "#e8c39e", E: "#c99a6b", k: "#3d3d5c", w: "#ffffff", p: "#ffb3c7" },
+    rows: [
+      "...KKKKKKKKKKKKKK...",
+      "..KbbbbbbbbbbbbbbK..",
+      "KEEbbbbbbbbbbbbbbEEK",
+      "KEEbkwbbbbbbbbwkbEEK",
+      "KEEbkkbbbbbbbbkkbEEK",
+      "KEEbbbbbbbbbbbbbbEEK",
+      "KEEbbbbbkkkkbbbbbEEK",
+      "KEbbbbbbbbbbbbbbbbEK",
+      ".KbbbbbbppppbbbbbbK.",
+      "..KKKKKKKKKKKKKKKK..",
+    ],
+  },
+  plant: {
+    palette: { G: "#8fd6a8", g: "#bfe8cf", K: "#4a3f5c", P: "#f7a8c0" },
+    rows: [
+      ".......GG.......",
+      "....GGGgGGG.....",
+      "..GGGgGGgGGGG...",
+      ".GGgGGGGGGGgGG..",
+      "...GGGGGGGGG....",
+      "....GGGGGGG.....",
+      "....KKKKKKK.....",
+      "...KPPPPPPPK....",
+      "...KPPPPPPPK....",
+      "....KKKKKKK.....",
+    ],
+  },
+};
+
+function drawSprite(canvas, name, scale) {
+  const { rows, palette } = SPRITES[name];
+  canvas.width = rows[0].length * scale;
+  canvas.height = rows.length * scale;
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+  rows.forEach((row, y) => {
+    [...row].forEach((ch, x) => {
+      if (ch === ".") return;
+      ctx.fillStyle = palette[ch];
+      ctx.fillRect(x * scale, y * scale, scale, scale);
+    });
+  });
+}
+
+document.querySelectorAll("canvas[data-sprite]").forEach((c) => {
+  drawSprite(c, c.dataset.sprite, Number(c.dataset.scale || 5));
+});
+
+// ---------- Escala de confianza ----------
+// Se aplica al porcentaje ya redondeado a 1 decimal, para que el color
+// siempre coincida con el número que se muestra.
+const SCALE = [
+  { max: 40,  key: "low",  name: "Baja",  color: "var(--low)",  note: "La red duda; prueba otra foto." },
+  { max: 75,  key: "mid",  name: "Media", color: "var(--mid)",  note: "Respuesta razonable, pero hay alternativas." },
+  { max: 101, key: "high", name: "Alta",  color: "var(--high)", note: "La red está muy segura." },
+];
+
+const pctOf = (p) => Math.round(p * 1000) / 10;   // 0.3456 -> 34.6
+const scaleFor = (p) => SCALE.find((s) => pctOf(p) < s.max);
+const pctBadge = (p) => {
+  const s = scaleFor(p);
+  return `<span class="pct ${s.key}">${pctOf(p).toFixed(1)} %</span>`;
+};
+const barHTML = (p) => `<div style="width:${pctOf(p)}%;background:${scaleFor(p).color}"></div>`;
+
+// ---------- Estado ----------
+const MEAN = [0.485, 0.456, 0.406];
+const STD = [0.229, 0.224, 0.225];
+let session = null;
+let meta = null;
+let currentFile = null;
+let lastResult = null;
+let pendingImage = null;
+
+const $ = (sel) => document.querySelector(sel);
+const setStatus = (msg) => { $("#status").textContent = msg; };
+const setToast = (msg) => { $("#toast").textContent = msg; };
+
+// ---------- Carga del modelo ----------
+async function loadModel() {
+  try {
+    setStatus("Cargando el modelo (≈45 MB, solo la primera vez)…");
+    meta = await (await fetch("model/classes.json")).json();
+    session = await ort.InferenceSession.create("model/best.onnx", { executionProviders: ["wasm"] });
+    setStatus("Modelo listo ✓ Sube una foto para empezar.");
+    if (pendingImage) analyze(pendingImage);
+  } catch (err) {
+    console.error(err);
+    setStatus("No pude cargar el modelo. ¿Corriste `uv run python -m cv.export` y abriste la página con un servidor local?");
+  }
+}
+
+// ---------- Preprocesado (espejo de cv/data.py) ----------
+function makeCanvas(w, h) {
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  return c;
+}
+
+function preprocess(img) {
+  const S = meta.image_size;            // 224
+  const R = meta.resize_short_side;     // 255 = int(224 * 1.14)
+  const w = img.naturalWidth;
+  const h = img.naturalHeight;
+
+  // Resize: el lado corto pasa a 255 px y el largo se escala proporcionalmente
+  let nw, nh;
+  if (w <= h) { nw = R; nh = Math.floor((R * h) / w); }
+  else        { nh = R; nw = Math.floor((R * w) / h); }
+
+  const resized = makeCanvas(nw, nh);
+  resized.getContext("2d").drawImage(img, 0, 0, nw, nh);
+
+  // CenterCrop 224×224
+  const left = Math.round((nw - S) / 2);
+  const top = Math.round((nh - S) / 2);
+  const crop = makeCanvas(S, S);
+  const cctx = crop.getContext("2d");
+  cctx.drawImage(resized, left, top, S, S, 0, 0, S, S);
+
+  // ToTensor + Normalize, en orden CHW
+  const px = cctx.getImageData(0, 0, S, S).data;
+  const N = S * S;
+  const data = new Float32Array(3 * N);
+  for (let i = 0; i < N; i++) {
+    for (let c = 0; c < 3; c++) {
+      data[c * N + i] = (px[i * 4 + c] / 255 - MEAN[c]) / STD[c];
+    }
+  }
+  return { tensor: new ort.Tensor("float32", data, [1, 3, S, S]), crop };
+}
+
+function softmax(logits) {
+  const max = Math.max(...logits);
+  const exps = logits.map((x) => Math.exp(x - max));
+  const sum = exps.reduce((a, b) => a + b, 0);
+  return exps.map((e) => e / sum);
+}
+
+// ---------- Inferencia ----------
+async function analyze(img) {
+  if (!session) { pendingImage = img; return; }
+  setStatus("Analizando…");
+  const { tensor, crop } = preprocess(img);
+  const out = await session.run({ input: tensor });
+  const probs = softmax(Array.from(out.logits.data));
+
+  // Dibuja lo que ve la red
+  const cropCanvas = $("#crop");
+  cropCanvas.getContext("2d").drawImage(crop, 0, 0);
+
+  // Especie = suma de probabilidades de sus razas
+  const speciesP = { perro: 0, gato: 0 };
+  probs.forEach((p, i) => { speciesP[meta.species[i]] += p; });
+  const species = speciesP.gato > speciesP.perro ? "gato" : "perro";
+
+  const ranking = meta.classes
+    .map((breed, i) => ({ breed, p: probs[i], species: meta.species[i] }))
+    .sort((a, b) => b.p - a.p);
+  const top3 = ranking.slice(0, 3);
+
+  lastResult = {
+    file: currentFile ? currentFile.name : "imagen",
+    species: { name: species, probability: speciesP[species] },
+    breed: top3[0],
+    top3,
+    scale: scaleFor(top3[0].p).name,
+  };
+  render(lastResult, speciesP);
+  setStatus("Listo ✓");
+  $("#btnCopyPredict").disabled = false;
+  $("#btnDownload").disabled = false;
+  updateCommand();
+}
+
+// ---------- Render ----------
+const SPECIES_LABEL = { perro: "Perro 🐶", gato: "Gato 🐱" };
+
+function render(r, speciesP) {
+  $("#resultsBox").classList.remove("hidden");
+
+  // Mascota reactiva según la especie detectada
+  drawSprite($("#mascot"), r.species.name === "gato" ? "cat" : "dog", 8);
+  const sp = speciesP[r.species.name];
+  $("#bubble").textContent = `¡Creo que es ${r.species.name === "gato" ? "un gato" : "un perro"}!`;
+
+  $("#speciesName").textContent = SPECIES_LABEL[r.species.name];
+  $("#speciesPct").innerHTML = pctBadge(sp);
+  $("#speciesBar").innerHTML = barHTML(sp);
+
+  const b = r.breed;
+  $("#breedName").textContent = b.breed;
+  $("#breedPct").innerHTML = pctBadge(b.p);
+  $("#breedBar").innerHTML = barHTML(b.p);
+
+  const s = scaleFor(b.p);
+  $("#advice").textContent = `Confianza ${s.name.toLowerCase()}: ${s.note}`;
+
+  $("#top3").innerHTML = r.top3.map((t, i) => `
+    <li>
+      <div class="row"><span>${i + 1}. ${t.breed} <small class="muted">(${t.species})</small></span>${pctBadge(t.p)}</div>
+      <div class="bar">${barHTML(t.p)}</div>
+    </li>`).join("");
+}
+
+// ---------- Subida de archivos ----------
+function loadFile(file) {
+  if (!file || !file.type.startsWith("image/")) {
+    setStatus("Ese archivo no es una imagen. Prueba con JPG, PNG o WEBP.");
+    return;
+  }
+  currentFile = file;
+  const url = URL.createObjectURL(file);
+  const img = $("#orig");
+  img.onload = () => {
+    $("#previews").classList.remove("hidden");
+    analyze(img);
+  };
+  img.src = url;
+}
+
+const drop = $("#drop");
+const fileInput = $("#file");
+fileInput.addEventListener("change", (e) => loadFile(e.target.files[0]));
+drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+drop.addEventListener("drop", (e) => {
+  e.preventDefault();
+  drop.classList.remove("over");
+  loadFile(e.dataTransfer.files[0]);
+});
+
+// ---------- Acciones ----------
+function updateCommand() {
+  const name = currentFile ? currentFile.name : "tu_foto.jpg";
+  $("#cmdBox").textContent = `uv run python -m cv.predict "${name}" --topk 3`;
+}
+
+async function copyText(text, okMsg) {
+  try {
+    await navigator.clipboard.writeText(text);
+    setToast(okMsg);
+  } catch {
+    setToast("No pude copiar automáticamente. Selecciona el texto y cópialo.");
+  }
+}
+
+$("#btnCopyPredict").addEventListener("click", () =>
+  copyText($("#cmdBox").textContent, "¡Comando de predicción copiado!"));
+
+$("#btnCopyTrain").addEventListener("click", () =>
+  copyText("uv run python -m cv.train --epochs 3", "¡Comando de entrenamiento copiado!"));
+
+$("#btnDownload").addEventListener("click", () => {
+  if (!lastResult) return;
+  const blob = new Blob([JSON.stringify(lastResult, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `resultado_${lastResult.file.replace(/\.[^.]+$/, "")}.json`;
+  a.click();
+  setToast("Resultado descargado.");
+});
+
+$("#btnMetrics").addEventListener("click", async () => {
+  const box = $("#metricsBox");
+  box.classList.remove("hidden");
+  try {
+    const m = await (await fetch("../outputs/metrics.json")).json();
+    box.textContent = `Test accuracy: ${(m.test_accuracy * 100).toFixed(1)} % · F1 macro: ${(m.macro_f1 * 100).toFixed(1)} % (ver outputs/metrics.json)`;
+  } catch {
+    box.textContent = "No encontré outputs/metrics.json. Corre: uv run python -m cv.evaluate";
+  }
+});
+
+$("#btnConfusion").addEventListener("click", () => window.open("../outputs/confusion_matrix.png", "_blank"));
+
+$("#btnReset").addEventListener("click", () => {
+  currentFile = null;
+  lastResult = null;
+  fileInput.value = "";
+  $("#previews").classList.add("hidden");
+  $("#resultsBox").classList.add("hidden");
+  $("#btnCopyPredict").disabled = true;
+  $("#btnDownload").disabled = true;
+  $("#metricsBox").classList.add("hidden");
+  setToast("");
+  setStatus("Listo. Sube otra foto.");
+  updateCommand();
+});
+
+loadModel();
+</script>
+</body>
+</html>

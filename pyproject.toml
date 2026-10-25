@@ -1,0 +1,47 @@
+[project]
+name = "cv"
+version = "0.1.0"
+description = "Clasificación de razas de mascotas con transfer learning (Oxford-IIIT Pet)"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "torch>=2.5",
+    "torchvision>=0.20",
+    "numpy",
+    "matplotlib",
+    "scikit-learn",
+    "pyyaml",
+    "tqdm",
+    "pillow",
+    "onnx>=1.23.2",
+    "onnxscript>=0.7.2",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel",
+    "jupyter",
+    "nbconvert",
+    "nbformat",
+    "onnxruntime>=1.31.0",
+    "pytest",
+    "streamlit>=1.66.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cv"]
+
+# PyTorch con CUDA: torch y torchvision salen del índice oficial de PyTorch.
+# Cambia `cu128` por `cu126`, `cu124`, etc. según tu driver, o quita esta sección para CPU.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu128" }]
+torchvision = [{ index = "pytorch-cu128" }]
