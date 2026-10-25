@@ -1,0 +1,10 @@
+# Netlify: sitio estático, sin paso de build.
+# Se publica la raíz del repo para que la página pueda leer app/model y app/assets.
+[build]
+  publish = "."
+
+# La raíz del sitio lleva directo a la página
+[[redirects]]
+  from = "/"
+  to = "/web/index.html"
+  status = 200

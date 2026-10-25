@@ -14,7 +14,8 @@ from cv.config import ROOT, load_config, resolve
 from cv.model import load_checkpoint
 from cv.species import species_of
 
-WEB_MODEL_DIR = ROOT / "web" / "model"
+# La web estática y la app de Streamlit comparten este modelo
+MODEL_DIR = ROOT / "app" / "model"
 
 
 def export(cfg: dict | None = None) -> None:
@@ -23,8 +24,8 @@ def export(cfg: dict | None = None) -> None:
     size = ckpt["image_size"]
     classes = ckpt["classes"]
 
-    WEB_MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    onnx_path = WEB_MODEL_DIR / "best.onnx"
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    onnx_path = MODEL_DIR / "best.onnx"
     dummy = torch.randn(1, 3, size, size)
     torch.onnx.export(
         model, (dummy,), onnx_path,
@@ -36,7 +37,7 @@ def export(cfg: dict | None = None) -> None:
     # meter en un solo archivo para que la web solo tenga que descargar uno.
     proto = onnx.load(onnx_path)
     onnx.save_model(proto, onnx_path, save_as_external_data=False)
-    (WEB_MODEL_DIR / "best.onnx.data").unlink(missing_ok=True)
+    (MODEL_DIR / "best.onnx.data").unlink(missing_ok=True)
 
     # Metadatos que necesita la web: nombres, especie y el preprocesado exacto.
     meta = {
@@ -45,7 +46,7 @@ def export(cfg: dict | None = None) -> None:
         "image_size": size,
         "resize_short_side": int(size * 1.14),
     }
-    (WEB_MODEL_DIR / "classes.json").write_text(
+    (MODEL_DIR / "classes.json").write_text(
         json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
 
     # Comprobación: ONNX debe dar los mismos logits que PyTorch.

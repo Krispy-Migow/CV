@@ -23,7 +23,8 @@
 !notebooks/
 !notebooks/*.ipynb
 
-# Página web (la carpeta web/model se genera con cv.export y no se respalda)
+# Página web estática (usa app/model y app/assets; se publica en Netlify)
+!netlify.toml
 !web/
 !web/index.html
 

@@ -51,7 +51,7 @@ uv run streamlit run app/streamlit_app.py
 
 Para desplegarla en Streamlit Community Cloud, `app/requirements.txt` define las dependencias y el archivo principal es `app/streamlit_app.py`. El modelo (`app/model/best.onnx`, unos 45 MB) y las métricas ya están dentro de `app/`.
 
-Si re-entrenas, regenera el modelo de la app copiando `web/model/best.onnx` y `web/model/classes.json` a `app/model/`, y las métricas a `app/assets/`.
+Si re-entrenas, `uv run python -m cv.export` escribe el modelo directamente en `app/model/`. Las métricas (`app/assets/metrics.json`) se actualizan copiando `outputs/metrics.json` y `outputs/confusion_matrix.png` a `app/assets/`.
 
 ## Dataset y licencia
 
@@ -74,6 +74,10 @@ Abre [http://localhost:8000/web/](http://localhost:8000/web/) y sube una foto. L
 - Escala de confianza: **0–39 % rojo** (baja), **40–74 % azul** (media), **75–100 % verde** (alta).
 - Pequeña diferencia con la CLI: el redimensionado del navegador (canvas) no es idéntico al de torchvision, así que los porcentajes pueden variar un par de puntos.
 - Los botones de la sección 5 copian comandos, descargan el resultado en JSON y abren las métricas y la matriz de confusión del proyecto.
+
+### Publicar la página en Netlify
+
+El repo incluye `netlify.toml`: publica la raíz sin paso de build y redirige `/` a `web/index.html`. En Netlify: *Add new site → Import an existing project*, elige el repo y no cambies la configuración. La página lee el modelo desde `app/model/`, así que no hay que copiar archivos.
 
 Para el paso a paso comentado, abre el notebook:
 

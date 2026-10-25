@@ -525,6 +525,11 @@ const barHTML = (p) => `<div style="width:${pctOf(p)}%;background:${scaleFor(p).
 // ---------- Estado ----------
 const MEAN = [0.485, 0.456, 0.406];
 const STD = [0.229, 0.224, 0.225];
+// Rutas relativas a esta página (web/index.html). El modelo y las métricas
+// viven en app/, así no se duplican los 45 MB del ONNX.
+const MODEL_DIR = "../app/model/";
+const ASSETS_DIR = "../app/assets/";
+
 let session = null;
 let meta = null;
 let currentFile = null;
@@ -539,8 +544,8 @@ const setToast = (msg) => { $("#toast").textContent = msg; };
 async function loadModel() {
   try {
     setStatus("Cargando el modelo (≈45 MB, solo la primera vez)…");
-    meta = await (await fetch("model/classes.json")).json();
-    session = await ort.InferenceSession.create("model/best.onnx", { executionProviders: ["wasm"] });
+    meta = await (await fetch(MODEL_DIR + "classes.json")).json();
+    session = await ort.InferenceSession.create(MODEL_DIR + "best.onnx", { executionProviders: ["wasm"] });
     setStatus("Modelo listo ✓ Sube una foto para empezar.");
     if (pendingImage) analyze(pendingImage);
   } catch (err) {
@@ -725,14 +730,14 @@ $("#btnMetrics").addEventListener("click", async () => {
   const box = $("#metricsBox");
   box.classList.remove("hidden");
   try {
-    const m = await (await fetch("../outputs/metrics.json")).json();
-    box.textContent = `Test accuracy: ${(m.test_accuracy * 100).toFixed(1)} % · F1 macro: ${(m.macro_f1 * 100).toFixed(1)} % (ver outputs/metrics.json)`;
+    const m = await (await fetch(ASSETS_DIR + "metrics.json")).json();
+    box.textContent = `Test accuracy: ${(m.test_accuracy * 100).toFixed(1)} % · F1 macro: ${(m.macro_f1 * 100).toFixed(1)} % (ver app/assets/metrics.json)`;
   } catch {
-    box.textContent = "No encontré outputs/metrics.json. Corre: uv run python -m cv.evaluate";
+    box.textContent = "No encontré app/assets/metrics.json. Corre: uv run python -m cv.evaluate";
   }
 });
 
-$("#btnConfusion").addEventListener("click", () => window.open("../outputs/confusion_matrix.png", "_blank"));
+$("#btnConfusion").addEventListener("click", () => window.open(ASSETS_DIR + "confusion_matrix.png", "_blank"));
 
 $("#btnReset").addEventListener("click", () => {
   currentFile = null;
